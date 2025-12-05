@@ -1,39 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { GameMode, Question, GameState, Fraction as FractionType, FeedbackType } from './types';
-import { Fraction } from './components/Fraction';
+import React, { useState } from 'react';
+import { GameMode, Question, GameState, FeedbackType } from './types';
 import { Venti } from './components/Venti';
 import { getVentiFeedback, generateGenshinProblem } from './services/geminiService';
 
-// --- Helper: Simplify Fraction ---
-const gcd = (a: number, b: number): number => {
-  // CRITICAL FIX: Prevent infinite recursion if inputs are NaN or Infinity
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 1;
-  return b === 0 ? a : gcd(b, a % b);
-};
-
-const simplify = (num: number, den: number): FractionType => {
-  // Safety check for NaN
-  const n = isNaN(num) ? 0 : num;
-  const d = isNaN(den) || den === 0 ? 1 : den;
-  
-  const common = gcd(Math.abs(n), Math.abs(d));
-  return {
-    numerator: n / common,
-    denominator: d / common
-  };
-};
-
-const stringifyFraction = (f: FractionType) => `${f.numerator}/${f.denominator}`;
+// Standard 6th Grade PI
+const PI = 3.14;
 
 export default function App() {
   // --- State ---
   const [mode, setMode] = useState<GameMode>(GameMode.MENU);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
-  const [inputNumerator, setInputNumerator] = useState<string>('');
-  const [inputDenominator, setInputDenominator] = useState<string>('');
-  const [ventiMessage, setVentiMessage] = useState<string>("你好呀，旅行者！准备好在提瓦特大陆进行一场数学冒险了吗？");
+  const [inputAnswer, setInputAnswer] = useState<string>('');
+  
+  const [ventiMessage, setVentiMessage] = useState<string>("听说你在课堂上对“圆”感到困惑？别担心，我是提瓦特最好的吟游诗人，也是很棒的老师哦！");
   const [ventiMood, setVentiMood] = useState<'happy' | 'thinking' | 'surprised' | 'neutral'>('happy');
   const [feedbackState, setFeedbackState] = useState<FeedbackType>('idle');
+  
   const [gameState, setGameState] = useState<GameState>({
     score: 0,
     streak: 0,
@@ -45,40 +27,42 @@ export default function App() {
 
   // --- Logic: Generate Basic Question ---
   const generateBasicQuestion = (): Question => {
-    const isMultiply = Math.random() > 0.5;
-    // Generate numbers suitable for 6th grade (avoid huge numbers)
-    const n1 = Math.floor(Math.random() * 8) + 1;
-    const d1 = Math.floor(Math.random() * 8) + 2;
-    const n2 = Math.floor(Math.random() * 8) + 1;
-    const d2 = Math.floor(Math.random() * 8) + 2;
+    // 50% chance for Circumference vs Area
+    // 50% chance for Radius vs Diameter given
+    const isArea = Math.random() > 0.5;
+    const isRadiusGiven = Math.random() > 0.6; // Slightly more likely to give Radius
 
-    const f1 = simplify(n1, d1);
-    const f2 = simplify(n2, d2);
+    // Generate easy numbers (integers 1-10, or multiples of 10)
+    let val = Math.floor(Math.random() * 9) + 1; // 1-9
+    if (Math.random() > 0.7) val = val * 10; // 10, 20, 30...
 
-    let resNum, resDen;
+    let answer = 0;
     let text = '';
+    
+    // r or d
+    const r = isRadiusGiven ? val : val / 2;
+    const d = isRadiusGiven ? val * 2 : val;
 
-    if (isMultiply) {
-      resNum = f1.numerator * f2.numerator;
-      resDen = f1.denominator * f2.denominator;
-      text = "计算结果 (最简分数):";
+    if (isArea) {
+      // Area = PI * r * r
+      // 6th grade math usually retains 2 decimal places max for PI=3.14 calculations, 
+      // but javascript float math can be messy.
+      answer = parseFloat((PI * r * r).toFixed(2));
+      text = `求圆的面积 (S)`;
     } else {
-      // Division
-      resNum = f1.numerator * f2.denominator;
-      resDen = f1.denominator * f2.numerator;
-      text = "计算结果 (最简分数):";
+      // Circumference = PI * d
+      answer = parseFloat((PI * d).toFixed(2));
+      text = `求圆的周长 (C)`;
     }
-
-    const correct = simplify(resNum, resDen);
 
     return {
       id: Date.now().toString(),
       type: 'calculation',
       text,
-      operandA: f1,
-      operandB: f2,
-      operation: isMultiply ? 'multiply' : 'divide',
-      correctAnswer: correct
+      radius: isRadiusGiven ? val : undefined,
+      diameter: !isRadiusGiven ? val : undefined,
+      target: isArea ? 'area' : 'circumference',
+      correctAnswer: answer
     };
   };
 
@@ -93,15 +77,14 @@ export default function App() {
       history: []
     });
     setFeedbackState('idle');
-    setInputNumerator('');
-    setInputDenominator('');
+    setInputAnswer('');
     
     if (selectedMode === GameMode.PRACTICE) {
       setCurrentQuestion(generateBasicQuestion());
-      setVentiMessage("简单的飞行训练开始了！让我们看看你的基本功吧。");
+      setVentiMessage("让我们从最基础的画圆开始吧！哪怕老师讲得太快，风也会等你。");
       setVentiMood('neutral');
     } else if (selectedMode === GameMode.ADVENTURE) {
-        setVentiMessage("正在聆听风中的讯息... (生成题目中)");
+        setVentiMessage("让我看看... 提瓦特大陆上哪里有完美的圆呢？ (生成题目中)");
         setFeedbackState('loading');
         const problem = await generateGenshinProblem();
         setFeedbackState('idle');
@@ -110,10 +93,10 @@ export default function App() {
                 id: Date.now().toString(),
                 type: 'word',
                 text: problem.text,
-                correctAnswer: simplify(problem.answerNumerator, problem.answerDenominator),
+                correctAnswer: problem.answer,
                 explanation: problem.explanation
             });
-            setVentiMessage("听听这个故事，旅行者，你能帮我算算吗？");
+            setVentiMessage("听听这个故事，旅行者，即使是圆，也有它的故事哦。");
         } else {
              // Fallback
              setVentiMessage("风神稍微打了个盹... 我们先做个基础题吧。");
@@ -127,30 +110,23 @@ export default function App() {
   const handleSubmit = async () => {
     if (!currentQuestion) return;
 
-    // VALIDATION: Check if inputs are valid numbers
-    const userNum = parseInt(inputNumerator);
-    const userDen = parseInt(inputDenominator);
+    const userVal = parseFloat(inputAnswer);
 
-    if (isNaN(userNum) || isNaN(userDen)) {
-        setVentiMessage("哎呀？这个数字看起来有点奇怪，是不是输入错了？");
-        setVentiMood('surprised');
-        return;
-    }
-    
-    if (userDen === 0) {
-        setVentiMessage("分母不能为0哦！这是提瓦特大陆的法则！");
+    if (isNaN(userVal)) {
+        setVentiMessage("诶嘿？这似乎不是一个数字哦。");
         setVentiMood('surprised');
         return;
     }
 
     setFeedbackState('loading');
-    setVentiMessage("嗯... 让我仔细看看你的答案...");
+    setVentiMessage("嗯... 让风神来验算一下...");
     setVentiMood('thinking');
 
-    const userSimp = simplify(userNum, userDen);
-    const correctSimp = currentQuestion.correctAnswer;
-
-    const isCorrect = userSimp.numerator === correctSimp.numerator && userSimp.denominator === correctSimp.denominator;
+    // Logic Check: Allow very small epsilon for floating point, though typically exact with 3.14
+    // But since input is string based on user typing, exact match of fixed(2) is usually what's expected in 6th grade
+    const correctVal = currentQuestion.correctAnswer;
+    const diff = Math.abs(userVal - correctVal);
+    const isCorrect = diff < 0.01; // Strict enough for 2 decimal places
 
     // Update Stats
     const newStreak = isCorrect ? gameState.streak + 1 : 0;
@@ -162,48 +138,47 @@ export default function App() {
       history: [...prev.history, { questionId: currentQuestion.id, isCorrect }]
     }));
 
-    // AI Feedback
-    const userFractionStr = `${userNum}/${userDen}`;
-    const correctFractionStr = `${correctSimp.numerator}/${correctSimp.denominator}`;
-    
     // Check for Reward (Every 5 correct)
     if (isCorrect && newStreak > 0 && newStreak % 5 === 0) {
         setShowRewardModal(true);
     }
 
-    if (currentQuestion.type === 'word') {
-        // Use explanation from AI generation if available, else fetch logic
-        if (!isCorrect) {
-             const feedback = await getVentiFeedback(currentQuestion.text, userFractionStr, correctFractionStr, isCorrect);
-             setVentiMessage(feedback);
-        } else {
-            setVentiMessage("太棒了！风神为你欢呼！");
-        }
+    // Generate Context string for AI
+    let contextQuestion = currentQuestion.text;
+    if (currentQuestion.type === 'calculation') {
+        const param = currentQuestion.radius ? `r=${currentQuestion.radius}` : `d=${currentQuestion.diameter}`;
+        contextQuestion = `${textForType(currentQuestion.target)}, 已知 ${param}`;
+    }
+
+    // AI Feedback
+    if (!isCorrect || currentQuestion.type === 'word') {
+         const feedback = await getVentiFeedback(contextQuestion, userVal.toString(), correctVal.toString(), isCorrect);
+         setVentiMessage(feedback);
     } else {
-        // Basic Calculation Feedback
-        const feedback = await getVentiFeedback(
-            `${stringifyFraction(currentQuestion.operandA!)} ${currentQuestion.operation === 'multiply' ? '×' : '÷'} ${stringifyFraction(currentQuestion.operandB!)}`,
-            userFractionStr,
-            correctFractionStr,
-            isCorrect
-        );
-        setVentiMessage(feedback);
+         // Simple random praise for correct calculation to save API calls
+         const praises = [
+             "太棒了！你的思绪像风一样清晰！",
+             "完全正确！看来课堂上的乌云已经散去了！",
+             "就是这样！圆周率也被你征服了呢！"
+         ];
+         setVentiMessage(praises[Math.floor(Math.random() * praises.length)]);
     }
 
     setVentiMood(isCorrect ? 'happy' : 'surprised');
     setFeedbackState(isCorrect ? 'correct' : 'incorrect');
   };
 
+  const textForType = (t?: string) => t === 'area' ? '求面积 (S)' : '求周长 (C)';
+
   // --- Logic: Next Question ---
   const handleNext = async () => {
-    setInputNumerator('');
-    setInputDenominator('');
+    setInputAnswer('');
     setFeedbackState('idle');
     setVentiMood('neutral');
 
     if (mode === GameMode.PRACTICE) {
        setCurrentQuestion(generateBasicQuestion());
-       setVentiMessage("下一阵风吹来了，准备好了吗？");
+       setVentiMessage("风向改变了，下一道题要来了哦！");
     } else if (mode === GameMode.ADVENTURE) {
         setVentiMessage("正在寻找下一个冒险...");
         setFeedbackState('loading');
@@ -214,7 +189,7 @@ export default function App() {
                 id: Date.now().toString(),
                 type: 'word',
                 text: problem.text,
-                correctAnswer: simplify(problem.answerNumerator, problem.answerDenominator),
+                correctAnswer: problem.answer,
                 explanation: problem.explanation
             });
             setVentiMessage("新的委托！");
@@ -232,8 +207,9 @@ export default function App() {
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="max-w-4xl w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border-4 border-anemo-200">
           <div className="text-center mb-8">
-            <h1 className="text-4xl md:text-6xl font-bold text-anemo-600 mb-4 tracking-wider">温迪的数学史诗</h1>
-            <p className="text-xl text-gray-600">Traveler's Fraction Adventure</p>
+            <h1 className="text-4xl md:text-6xl font-bold text-anemo-600 mb-4 tracking-wider">温迪的几何歌谣</h1>
+            <p className="text-xl text-gray-600">Traveler's Geometry Ballad</p>
+            <p className="text-md text-anemo-500 mt-2 font-bold">~ 献给在课堂上对“圆”感到迷茫的你 ~</p>
           </div>
 
           <div className="flex flex-col md:flex-row items-center justify-center gap-8 mb-8">
@@ -244,7 +220,7 @@ export default function App() {
              <button 
                 onClick={() => setMode(GameMode.TUTORIAL)}
                 className="bg-geo hover:bg-yellow-500 text-white font-bold py-4 px-8 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center gap-2">
-                <span>📖</span> 基础讲解 (Basic)
+                <span>📖</span> 温迪补习班 (Tutorial)
              </button>
              <button 
                 onClick={() => startGame(GameMode.PRACTICE)}
@@ -267,54 +243,57 @@ export default function App() {
       return (
         <div className="min-h-screen p-4 flex flex-col items-center">
              <div className="max-w-3xl w-full bg-white rounded-3xl shadow-xl p-8 border-2 border-anemo-200 mt-10">
-                <h2 className="text-3xl font-bold text-anemo-600 mb-6 text-center">温迪的吟游课堂</h2>
+                <h2 className="text-3xl font-bold text-anemo-600 mb-6 text-center">温迪的几何补习班</h2>
                 
+                <p className="text-gray-600 text-center mb-8 italic">
+                    "我也经常记不住乐谱呢，所以没听懂也没关系。让我们重新认识一下这位叫'圆'的朋友。"
+                </p>
+
                 <div className="space-y-8">
                     <div className="bg-anemo-50 p-6 rounded-xl">
                         <h3 className="text-xl font-bold text-anemo-800 mb-4 flex items-center gap-2">
                             <span className="bg-anemo-500 text-white w-8 h-8 rounded-full flex items-center justify-center">1</span>
-                            分数乘法
+                            那个神奇的数字 π (3.14)
                         </h3>
-                        <p className="text-lg text-gray-700 mb-4">
-                            "分子乘分子，分母乘分母。记得要约分哦！"
+                        <p className="text-lg text-gray-700 mb-4 leading-relaxed">
+                            就像风无处不在，圆的周长总是它直径的 3倍多一点点。<br/>
+                            无论圆是大是小，这个倍数永远不变，我们叫它 <strong className="text-anemo-600 text-2xl">π</strong>。<br/>
+                            为了方便计算，我们通常把它的“尾巴”藏起来，只记作 <strong>3.14</strong>。
                         </p>
-                        <div className="flex items-center justify-center gap-4 text-2xl bg-white p-4 rounded-lg shadow-inner">
-                            <Fraction numerator={2} denominator={3} />
-                            <span>×</span>
-                            <Fraction numerator={4} denominator={5} />
-                            <span>=</span>
-                            <Fraction numerator="2×4" denominator="3×5" />
-                            <span>=</span>
-                            <Fraction numerator={8} denominator={15} />
+                    </div>
+
+                    <div className="bg-orange-50 p-6 rounded-xl">
+                        <h3 className="text-xl font-bold text-orange-800 mb-4 flex items-center gap-2">
+                            <span className="bg-orange-500 text-white w-8 h-8 rounded-full flex items-center justify-center">2</span>
+                            圆的周长 (C) - 给圆围个围巾
+                        </h3>
+                        <p className="text-lg text-gray-700 mb-2">
+                            只要知道直径(d)，乘以 3.14 就是周长。
+                        </p>
+                        <div className="bg-white p-4 rounded-lg shadow-sm text-center font-mono text-xl text-orange-700">
+                             C = πd <span className="text-gray-400 mx-2">或</span> C = 2πr
                         </div>
                     </div>
 
                     <div className="bg-pink-50 p-6 rounded-xl">
                         <h3 className="text-xl font-bold text-pink-800 mb-4 flex items-center gap-2">
-                            <span className="bg-pink-500 text-white w-8 h-8 rounded-full flex items-center justify-center">2</span>
-                            分数除法
+                            <span className="bg-pink-500 text-white w-8 h-8 rounded-full flex items-center justify-center">3</span>
+                            圆的面积 (S) - 铺满整个圆
                         </h3>
-                        <p className="text-lg text-gray-700 mb-4">
-                            "除以一个数，等于乘以这个数的<span className="font-bold text-pink-600">倒数</span>（上下颠倒）。"
+                        <p className="text-lg text-gray-700 mb-2">
+                            面积和半径(r)关系最大！记得是半径的“平方”（自己乘自己），再乘 3.14。
                         </p>
-                        <div className="flex items-center justify-center gap-4 text-2xl bg-white p-4 rounded-lg shadow-inner">
-                            <Fraction numerator={2} denominator={3} />
-                            <span>÷</span>
-                            <Fraction numerator={5} denominator={7} />
-                            <span>=</span>
-                            <Fraction numerator={2} denominator={3} />
-                            <span>×</span>
-                            <Fraction numerator={7} denominator={5} className="text-pink-600 font-bold" />
-                            <span>=</span>
-                            <Fraction numerator={14} denominator={15} />
+                         <div className="bg-white p-4 rounded-lg shadow-sm text-center font-mono text-xl text-pink-700">
+                             S = πr²
                         </div>
+                        <p className="text-sm text-gray-500 mt-2 text-center">千万别把平方忘了哦！是 r × r，不是 r × 2！</p>
                     </div>
                 </div>
 
                 <button 
                     onClick={() => setMode(GameMode.MENU)}
                     className="mt-8 w-full bg-anemo-500 text-white font-bold py-3 rounded-xl hover:bg-anemo-600 transition">
-                    听懂了，回去吧！
+                    我觉得我行了！回去试炼！
                 </button>
              </div>
         </div>
@@ -358,54 +337,59 @@ export default function App() {
                             {currentQuestion.text}
                         </p>
                     ) : (
-                        <div className="flex items-center justify-center gap-4 text-4xl md:text-5xl text-gray-800 font-bold py-8">
-                            <Fraction numerator={currentQuestion.operandA!.numerator} denominator={currentQuestion.operandA!.denominator} large />
-                            <span className="text-anemo-500 mx-2">{currentQuestion.operation === 'multiply' ? '×' : '÷'}</span>
-                            <Fraction numerator={currentQuestion.operandB!.numerator} denominator={currentQuestion.operandB!.denominator} large />
-                            <span>=</span>
-                            <span className="text-gray-300">?</span>
+                        <div className="flex flex-col items-center justify-center gap-6 py-4">
+                            {/* Visual Representation of Circle Param */}
+                            <div className="relative w-32 h-32 rounded-full border-4 border-gray-300 flex items-center justify-center bg-gray-50">
+                                <div className="absolute w-1 h-1 bg-black rounded-full"></div>
+                                {currentQuestion.radius && (
+                                    <>
+                                        <div className="absolute top-1/2 left-1/2 w-1/2 h-0.5 bg-anemo-500"></div>
+                                        <div className="absolute top-1/2 left-3/4 -translate-y-4 text-anemo-600 font-bold">r={currentQuestion.radius}</div>
+                                    </>
+                                )}
+                                {currentQuestion.diameter && (
+                                     <>
+                                        <div className="absolute top-1/2 left-0 w-full h-0.5 bg-orange-400"></div>
+                                        <div className="absolute top-1/2 left-1/2 -translate-y-4 text-orange-600 font-bold">d={currentQuestion.diameter}</div>
+                                    </>
+                                )}
+                            </div>
+                            
+                            <div className="text-2xl font-bold text-gray-800">
+                                {currentQuestion.text}
+                            </div>
+                            <div className="text-sm text-gray-400 font-mono">
+                                (π 取 3.14)
+                            </div>
                         </div>
                     )}
                 </div>
 
                 {/* Answer Input */}
                 <div className="flex flex-col items-center gap-4">
-                    <p className="text-sm text-gray-500 uppercase tracking-widest font-bold">你的答案 (最简分数)</p>
+                    <p className="text-sm text-gray-500 uppercase tracking-widest font-bold">你的答案 (数字)</p>
                     
                     {feedbackState !== 'correct' && feedbackState !== 'incorrect' ? (
-                         <div className="flex items-center gap-4">
-                            <div className="flex flex-col gap-2 w-24">
-                                <input 
-                                    type="number" 
-                                    placeholder="分子"
-                                    value={inputNumerator}
-                                    onChange={(e) => setInputNumerator(e.target.value)}
-                                    className="w-full text-center text-2xl p-2 border-2 border-gray-200 rounded-xl focus:border-anemo-400 focus:outline-none"
-                                />
-                                <div className="h-0.5 bg-gray-800 w-full"></div>
-                                <input 
-                                    type="number" 
-                                    placeholder="分母"
-                                    value={inputDenominator}
-                                    onChange={(e) => setInputDenominator(e.target.value)}
-                                    className="w-full text-center text-2xl p-2 border-2 border-gray-200 rounded-xl focus:border-anemo-400 focus:outline-none"
-                                />
-                            </div>
+                         <div className="flex items-center gap-4 w-full max-w-xs">
+                            <input 
+                                type="number" 
+                                placeholder="输入结果..."
+                                value={inputAnswer}
+                                onChange={(e) => setInputAnswer(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && inputAnswer && handleSubmit()}
+                                className="w-full text-center text-3xl p-4 border-2 border-gray-200 rounded-xl focus:border-anemo-400 focus:outline-none"
+                            />
                          </div>
                     ) : (
-                        <div className="flex items-center gap-4 animate-bounce-in">
-                            <div className={`p-4 rounded-xl border-4 ${feedbackState === 'correct' ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-400 bg-red-50 text-red-700'}`}>
+                        <div className="flex flex-col items-center gap-4 animate-bounce-in w-full">
+                            <div className={`p-4 rounded-xl border-4 w-full text-center ${feedbackState === 'correct' ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-400 bg-red-50 text-red-700'}`}>
                                 <span className="text-2xl font-bold">
-                                    {feedbackState === 'correct' ? "正确!" : "错误"}
+                                    {feedbackState === 'correct' ? "正确!" : "再接再厉"}
                                 </span>
                             </div>
                             {feedbackState === 'incorrect' && (
-                                <div className="text-xl text-gray-600 flex items-center gap-2">
-                                    正确答案是: 
-                                    <Fraction 
-                                        numerator={currentQuestion.correctAnswer.numerator} 
-                                        denominator={currentQuestion.correctAnswer.denominator} 
-                                    />
+                                <div className="text-xl text-gray-600 flex items-center gap-2 bg-gray-100 px-4 py-2 rounded-lg">
+                                    正确答案是: <span className="font-bold text-anemo-600">{currentQuestion.correctAnswer}</span>
                                 </div>
                             )}
                         </div>
@@ -421,7 +405,7 @@ export default function App() {
             {feedbackState === 'idle' && (
                  <button 
                     onClick={handleSubmit}
-                    disabled={!inputNumerator || !inputDenominator}
+                    disabled={!inputAnswer}
                     className="w-full bg-anemo-500 hover:bg-anemo-600 disabled:bg-gray-300 text-white font-bold text-xl py-4 rounded-2xl shadow-lg transition transform active:scale-95">
                     提交答案
                 </button>
@@ -429,7 +413,7 @@ export default function App() {
             
             {feedbackState === 'loading' && (
                 <button disabled className="w-full bg-gray-100 text-gray-400 font-bold text-xl py-4 rounded-2xl cursor-wait flex justify-center items-center gap-2">
-                    <span className="animate-spin text-2xl">🍃</span> 计算风向中...
+                    <span className="animate-spin text-2xl">🍃</span> 呼唤风神中...
                 </button>
             )}
 
@@ -450,7 +434,7 @@ export default function App() {
                 <div className="absolute inset-0 bg-gradient-to-br from-yellow-100 to-transparent opacity-50"></div>
                 <h2 className="text-3xl font-bold text-yellow-600 mb-4 relative z-10">获得成就!</h2>
                 <div className="text-6xl mb-4 animate-bounce relative z-10">💎</div>
-                <p className="text-gray-700 text-lg mb-6 relative z-10">连续答对5题！风神赐予你 10 原石 (虚拟)!</p>
+                <p className="text-gray-700 text-lg mb-6 relative z-10">连续答对5题！温迪送你一颗大苹果 (和10原石)!</p>
                 <button 
                     onClick={() => setShowRewardModal(false)}
                     className="bg-anemo-500 text-white font-bold py-3 px-8 rounded-xl hover:bg-anemo-600 transition relative z-10">

@@ -5,21 +5,17 @@ export enum GameMode {
   ADVENTURE = 'ADVENTURE', // Word problems
 }
 
-export interface Fraction {
-  numerator: number;
-  denominator: number;
-}
-
 export interface Question {
   id: string;
   type: 'calculation' | 'word';
   text: string;
-  operandA?: Fraction;
-  operandB?: Fraction;
-  operation?: 'multiply' | 'divide';
-  correctAnswer: Fraction;
+  // For calculation display
+  radius?: number;
+  diameter?: number;
+  target?: 'circumference' | 'area'; 
+  
+  correctAnswer: number;
   explanation?: string; // Pre-calculated or AI generated
-  options?: Fraction[]; // For multiple choice
 }
 
 export interface GameState {
