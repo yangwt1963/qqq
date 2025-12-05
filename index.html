@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>温迪的数学史诗 - Genshin Math</title>
+    <!-- Polyfill for process.env to prevent ReferenceErrors in browser environments -->
+    <script>
+      if (typeof process === 'undefined') {
+        window.process = { env: {} };
+      }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -27,6 +33,26 @@
             },
             fontFamily: {
               sans: ['"Comic Sans MS"', '"Chalkboard SE"', 'sans-serif'],
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.5s ease-out forwards',
+              'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
+              'bounce-in': 'bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards',
+              'pulse-slow': 'pulse 3s infinite',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              fadeInUp: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              bounceIn: {
+                '0%': { opacity: '0', transform: 'scale(0.3)' },
+                '100%': { opacity: '1', transform: 'scale(1)' },
+              }
             }
           }
         }
@@ -50,6 +76,9 @@
       ::-webkit-scrollbar-thumb {
         background: #2dd4bf; 
         border-radius: 4px;
+      }
+      .cursor-wait {
+        cursor: wait;
       }
     </style>
   <script type="importmap">

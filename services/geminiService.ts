@@ -17,23 +17,15 @@ const SYSTEM_PROMPT = `
 分数除法口诀：除以一个数，等于乘以这个数的倒数。
 `;
 
-// Lazy initialization to prevent "process is not defined" errors during module load
+// Lazy initialization
 let aiClient: GoogleGenAI | null = null;
 
 const getAiClient = () => {
   if (aiClient) return aiClient;
   
-  // Safe access to process.env
-  let apiKey = '';
-  try {
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      apiKey = process.env.API_KEY;
-    }
-  } catch (e) {
-    // Ignore error if process is not defined
-    console.warn("Could not access process.env");
-  }
-
+  // Access process.env.API_KEY safely, assuming polyfill exists in index.html for browsers
+  const apiKey = process.env.API_KEY || '';
+  
   aiClient = new GoogleGenAI({ apiKey });
   return aiClient;
 };
@@ -45,8 +37,9 @@ export const getVentiFeedback = async (
   isCorrect: boolean
 ): Promise<string> => {
   const ai = getAiClient();
-  // We can't easily check api key presence on the instance, so we check the env safely again or just try
-  // If the key is empty, the API call will fail gracefully.
+  
+  // Basic validation to avoid empty API calls if key is missing (though client handles it gracefully usually)
+  // We proceed anyway to let the client throw the specific error if needed, or handle fallback in catch.
 
   const prompt = `
   题目：${question}
