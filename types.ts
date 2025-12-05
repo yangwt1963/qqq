@@ -10,14 +10,17 @@ export interface Question {
   type: 'calculation' | 'word';
   text: string; // The question display text
   
-  // Specific for Ratio Practice
-  subType?: 'simplify' | 'value'; // simplify (化简比) or value (求比值)
+  // Specific for Circle Practice
+  // basic: r <-> d relationship
+  // circumference: C = pi * d
+  // area: S = pi * r^2
+  subType?: 'basic' | 'circumference' | 'area';
   
-  // Answers can be string (for "2:3") or number (for 0.5)
-  correctAnswer: string | number; 
+  // Answers for circles are usually numbers (floats)
+  correctAnswer: number; 
   explanation?: string; 
   
-  // New: Hint for the user
+  // Hint for the user
   hint?: string;
 }
 

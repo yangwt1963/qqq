@@ -3,20 +3,13 @@ import { GameMode, Question, GameState, FeedbackType } from './types';
 import { Venti } from './components/Venti';
 import { getVentiFeedback, generateGenshinProblem } from './services/geminiService';
 
-// Helper to find GCD
-const gcd = (a: number, b: number): number => {
-  return b === 0 ? a : gcd(b, a % b);
-};
-
 export default function App() {
   // --- State ---
   const [mode, setMode] = useState<GameMode>(GameMode.MENU);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
-  
-  // Input is now string to support "2:3"
   const [inputAnswer, setInputAnswer] = useState<string>('');
   
-  const [ventiMessage, setVentiMessage] = useState<string>("听说你在课堂上对“比”有点晕头转向？\n没关系，风神温迪来陪你重新梳理一遍。我们不急，慢慢来。");
+  const [ventiMessage, setVentiMessage] = useState<string>("听说你在课堂上对“圆”有点晕头转向？\n没关系，风神温迪来教你。圆是最完美的形状，就像风的循环一样。");
   const [ventiMood, setVentiMood] = useState<'happy' | 'thinking' | 'surprised' | 'neutral'>('happy');
   const [feedbackState, setFeedbackState] = useState<FeedbackType>('idle');
   const [hasUsedHint, setHasUsedHint] = useState(false);
@@ -32,60 +25,48 @@ export default function App() {
 
   // --- Logic: Generate Basic Question (Practice) ---
   const generateBasicQuestion = (): Question => {
-    // Type 1: Simplify Ratio (化简比) - 60% chance
-    // Type 2: Value of Ratio (求比值) - 40% chance
-    const isSimplify = Math.random() > 0.4;
-    
-    // Generate a base ratio "a : b" which is already simplified
-    const baseA = Math.floor(Math.random() * 5) + 1; // 1-5
-    let baseB = Math.floor(Math.random() * 8) + 1; // 1-8
-    
-    // Avoid 1:1 sometimes for variety, though valid
-    if (baseA === baseB && Math.random() > 0.5) baseB += 1;
-
-    // Ensure they are coprime (simplified)
-    const divisor = gcd(baseA, baseB);
-    const simplifiedA = baseA / divisor;
-    const simplifiedB = baseB / divisor;
-
-    // Scale them up to make the question
-    const scale = Math.floor(Math.random() * 6) + 2; // multiply by 2 to 7
-    const qA = simplifiedA * scale;
-    const qB = simplifiedB * scale;
-
+    // 30% r <-> d, 35% Circumference, 35% Area
+    const rand = Math.random();
     const id = Date.now().toString();
-
-    if (isSimplify) {
+    
+    // Use integers for radius mostly to make math slightly easier
+    const r = Math.floor(Math.random() * 9) + 1; // 1-9
+    
+    if (rand < 0.3) {
+        // Basic r <-> d
+        // Ask for Diameter given Radius
+        const ans = r * 2;
         return {
             id,
             type: 'calculation',
-            subType: 'simplify',
-            text: `化简比：${qA} : ${qB}`,
-            correctAnswer: `${simplifiedA}:${simplifiedB}`,
-            hint: `试着找找 ${qA} 和 ${qB} 的最大公因数（比如${scale}？），然后两边同时除以它。`
+            subType: 'basic',
+            text: `如果一个圆的半径 (r) 是 ${r} 厘米，它的直径 (d) 是多少？`,
+            correctAnswer: ans,
+            hint: "还记得吗？直径是半径的 2 倍哦。(d = 2r)"
+        };
+    } else if (rand < 0.65) {
+        // Circumference
+        // C = 2 * 3.14 * r
+        const ans = parseFloat((2 * 3.14 * r).toFixed(2));
+        return {
+            id,
+            type: 'calculation',
+            subType: 'circumference',
+            text: `求半径 r = ${r} 厘米的圆的周长 (C)。(π取3.14)`,
+            correctAnswer: ans,
+            hint: `圆的周长公式是 C = 2πr。也就是 2 × 3.14 × ${r}。`
         };
     } else {
-        // Value of Ratio logic...
-        let vA = qA;
-        let vB = qB;
-        
-        if (Math.random() > 0.5) {
-             // Integer result
-             vA = vB * (Math.floor(Math.random() * 3) + 1);
-        } else {
-             // Simple decimal like 0.5, 0.25, 0.2
-             vB = vA * (Math.floor(Math.random() * 2) + 1) * 2; 
-        }
-        
-        const correctVal = vA / vB;
-        
+        // Area
+        // S = 3.14 * r^2
+        const ans = parseFloat((3.14 * r * r).toFixed(2));
         return {
             id,
             type: 'calculation',
-            subType: 'value',
-            text: `求比值：${vA} : ${vB}`,
-            correctAnswer: correctVal, // Number for comparison
-            hint: `“求比值”就是做除法哦。用前项 (${vA}) 除以后项 (${vB}) 试试看？`
+            subType: 'area',
+            text: `求半径 r = ${r} 厘米的圆的面积 (S)。(π取3.14)`,
+            correctAnswer: ans,
+            hint: `圆的面积公式是 S = πr²。记得先算 ${r} × ${r}，再乘 3.14 哦。`
         };
     }
   };
@@ -106,10 +87,10 @@ export default function App() {
     
     if (selectedMode === GameMode.PRACTICE) {
       setCurrentQuestion(generateBasicQuestion());
-      setVentiMessage("来，我们先做几个深呼吸。基础是最重要的，就像蒲公英的根一样。我们先从化简比和求比值开始。");
+      setVentiMessage("来，我们从最简单的公式开始练习。");
       setVentiMood('neutral');
     } else if (selectedMode === GameMode.ADVENTURE) {
-        setVentiMessage("让我看看冒险家协会有没有什么委托... 也就是“应用题”啦！(题目生成中...)");
+        setVentiMessage("让我看看冒险家协会有没有什么委托... (生成题目中...)");
         setFeedbackState('loading');
         const problem = await generateGenshinProblem();
         setFeedbackState('idle');
@@ -122,7 +103,7 @@ export default function App() {
                 explanation: problem.explanation,
                 hint: problem.hint
             });
-            setVentiMessage("新的委托来了！别怕，把题目多读两遍，找到里面的“比”。");
+            setVentiMessage("新的委托来了！注意看清是求周长还是面积哦。");
         } else {
              setVentiMessage("风神稍微打了个盹... 我们先做个基础题吧。");
              setMode(GameMode.PRACTICE);
@@ -134,33 +115,18 @@ export default function App() {
   // --- Logic: Submit Answer ---
   const handleSubmit = async () => {
     if (!currentQuestion) return;
-
-    // Normalize Input: replace Chinese colon with English colon, remove spaces
-    const cleanInput = inputAnswer.replace(/：/g, ':').replace(/\s/g, '');
-
-    if (!cleanInput) return;
+    if (!inputAnswer) return;
 
     setFeedbackState('loading');
-    setVentiMessage("嗯... 让风神仔细看看你的思路...");
+    setVentiMessage("嗯... 风神正在验算...");
     setVentiMood('thinking');
 
-    let isCorrect = false;
-
-    // Check Logic
-    if (currentQuestion.type === 'calculation' && currentQuestion.subType === 'simplify') {
-        // String comparison "2:3" vs "2:3"
-        isCorrect = cleanInput === currentQuestion.correctAnswer;
-    } else {
-        // Number comparison (Value of Ratio) OR Word problem result
-        if (typeof currentQuestion.correctAnswer === 'number') {
-            const val = parseFloat(cleanInput);
-            if (!isNaN(val)) {
-                isCorrect = Math.abs(val - currentQuestion.correctAnswer) < 0.01;
-            }
-        } else {
-            isCorrect = cleanInput === String(currentQuestion.correctAnswer).replace(/\s/g, '');
-        }
-    }
+    // Number check with tolerance
+    const userVal = parseFloat(inputAnswer);
+    const correctVal = currentQuestion.correctAnswer;
+    
+    // Allow 0.05 margin of error for float arithmetic
+    let isCorrect = Math.abs(userVal - correctVal) <= 0.05;
 
     // Update Stats
     const newStreak = isCorrect ? gameState.streak + 1 : 0;
@@ -177,23 +143,20 @@ export default function App() {
         setShowRewardModal(true);
     }
 
-    // Context for AI
-    let contextQuestion = currentQuestion.text;
-    
     // AI Feedback
     if (!isCorrect || currentQuestion.type === 'word') {
          const feedback = await getVentiFeedback(
-             contextQuestion, 
-             cleanInput, 
+             currentQuestion.text, 
+             inputAnswer, 
              currentQuestion.correctAnswer.toString(), 
              isCorrect
          );
          setVentiMessage(feedback);
     } else {
          const praises = [
-             "太棒了！这次你做得很对！",
-             "看吧，只要找到了规律，比也没有那么难！",
-             "就像风琴的弦一样精准！就是这个比例！"
+             "这就对了！圆满的答案！",
+             "像风神护盾一样完美的圆！",
+             "你已经掌握了 π 的奥秘！"
          ];
          setVentiMessage(praises[Math.floor(Math.random() * praises.length)]);
     }
@@ -219,9 +182,9 @@ export default function App() {
 
     if (mode === GameMode.PRACTICE) {
        setCurrentQuestion(generateBasicQuestion());
-       setVentiMessage("准备好了吗？下一道题乘风而来咯！");
+       setVentiMessage("下一道题来了，准备好了吗？");
     } else if (mode === GameMode.ADVENTURE) {
-        setVentiMessage("正在寻找下一个委托...");
+        setVentiMessage("寻找下一个委托...");
         setFeedbackState('loading');
         const problem = await generateGenshinProblem();
         setFeedbackState('idle');
@@ -234,7 +197,7 @@ export default function App() {
                 explanation: problem.explanation,
                 hint: problem.hint
             });
-            setVentiMessage("这是关于提瓦特生活的问题哦。");
+            setVentiMessage("加油！");
         } else {
             setMode(GameMode.PRACTICE);
             setCurrentQuestion(generateBasicQuestion());
@@ -248,9 +211,9 @@ export default function App() {
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="max-w-4xl w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border-4 border-anemo-200">
           <div className="text-center mb-8">
-            <h1 className="text-4xl md:text-6xl font-bold text-anemo-600 mb-4 tracking-wider">温迪的比例歌谣</h1>
-            <p className="text-xl text-gray-600">Traveler's Ratio Ballad</p>
-            <p className="text-md text-anemo-500 mt-2 font-bold">~ 献给在课堂上被“比”弄得晕头转向的你 ~</p>
+            <h1 className="text-4xl md:text-6xl font-bold text-anemo-600 mb-4 tracking-wider">温迪的圆之歌谣</h1>
+            <p className="text-xl text-gray-600">Traveler's Circle Ballad</p>
+            <p className="text-md text-anemo-500 mt-2 font-bold">~ 献给正在学习圆周率的你 ~</p>
           </div>
 
           <div className="flex flex-col md:flex-row items-center justify-center gap-8 mb-8">
@@ -284,60 +247,40 @@ export default function App() {
       return (
         <div className="min-h-screen p-4 flex flex-col items-center">
              <div className="max-w-3xl w-full bg-white rounded-3xl shadow-xl p-8 border-2 border-anemo-200 mt-10">
-                <h2 className="text-3xl font-bold text-anemo-600 mb-6 text-center">温迪的补习角</h2>
+                <h2 className="text-3xl font-bold text-anemo-600 mb-6 text-center">温迪的补习角 - 圆的世界</h2>
                 
-                <p className="text-gray-600 text-center mb-8 italic">
-                    "别难过，有时候数字就像音符，需要找到它们的节奏。来，我们重新认识一下'比'。"
-                </p>
-
                 <div className="space-y-8">
                     <div className="bg-anemo-50 p-6 rounded-xl">
-                        <h3 className="text-xl font-bold text-anemo-800 mb-4 flex items-center gap-2">
-                            <span className="bg-anemo-500 text-white w-8 h-8 rounded-full flex items-center justify-center">1</span>
-                            什么是比？ (Ratio)
-                        </h3>
-                        <p className="text-lg text-gray-700 mb-4 leading-relaxed">
-                            比就是两个数量之间的“关系”。<br/>
-                            比如：我有2个苹果，你有3个苹果。<br/>
-                            我们的苹果数量比就是 <strong className="text-anemo-600 text-2xl">2 : 3</strong>。<br/>
-                            前面的叫<strong>前项</strong>，后面的叫<strong>后项</strong>。
+                        <h3 className="text-xl font-bold text-anemo-800 mb-4">1. 认识圆 (Radius & Diameter)</h3>
+                        <p className="text-lg text-gray-700">
+                            <strong>圆心 (O)</strong> 是圆正中心。
+                            <br/><strong>半径 (r)</strong> 是圆心到圆边的距离。
+                            <br/><strong>直径 (d)</strong> 是穿过圆心的一条线。
+                            <br/>口诀：<span className="text-anemo-600 font-bold">直径是半径的2倍 (d = 2r)</span>。
                         </p>
                     </div>
 
                     <div className="bg-orange-50 p-6 rounded-xl">
-                        <h3 className="text-xl font-bold text-orange-800 mb-4 flex items-center gap-2">
-                            <span className="bg-orange-500 text-white w-8 h-8 rounded-full flex items-center justify-center">2</span>
-                            化简比 (Simplify) - 变瘦变精神！
-                        </h3>
-                        <p className="text-lg text-gray-700 mb-2">
-                            我们喜欢最简单的数字。比如 <strong>10 : 20</strong>，太臃肿了！<br/>
-                            我们要同时除以它们的“最大公因数”。<br/>
-                            10和20都能被10整除，所以除以10，变成 <strong className="text-orange-600">1 : 2</strong>。
+                        <h3 className="text-xl font-bold text-orange-800 mb-4">2. 圆周率 (π)</h3>
+                        <p className="text-lg text-gray-700">
+                            不论圆有多大，它的周长除以直径，永远等于同一个数，叫做 <strong>π (pai)</strong>。
+                            <br/>在小学数学里，我们通常取 <strong className="text-orange-600">π ≈ 3.14</strong>。
                         </p>
-                        <div className="bg-white p-4 rounded-lg shadow-sm mt-2 text-gray-600">
-                             结果仍然是一个比，要有冒号哦！
-                        </div>
                     </div>
 
                     <div className="bg-pink-50 p-6 rounded-xl">
-                        <h3 className="text-xl font-bold text-pink-800 mb-4 flex items-center gap-2">
-                            <span className="bg-pink-500 text-white w-8 h-8 rounded-full flex items-center justify-center">3</span>
-                            求比值 (Value) - 变成一个数
-                        </h3>
-                        <p className="text-lg text-gray-700 mb-2">
-                            这就简单了！用<strong>前项 ÷ 后项</strong>。<br/>
-                            比如 2 : 5 的比值，就是 2 ÷ 5 = <strong className="text-pink-600">0.4</strong> (或者 2/5)。
-                        </p>
-                         <div className="bg-white p-4 rounded-lg shadow-sm text-center font-mono text-xl text-pink-700 mt-2">
-                             结果是一个数，没有冒号！
-                        </div>
+                        <h3 className="text-xl font-bold text-pink-800 mb-4">3. 周长与面积 (Circumference & Area)</h3>
+                        <ul className="list-disc list-inside text-lg text-gray-700 space-y-2">
+                            <li><strong>周长 (C)</strong>：围成圆的线的长度。<br/>公式：<strong className="text-pink-600">C = πd</strong> 或 <strong className="text-pink-600">C = 2πr</strong></li>
+                            <li><strong>面积 (S)</strong>：圆里面的大小。<br/>公式：<strong className="text-pink-600">S = πr²</strong> (就是 π × r × r)</li>
+                        </ul>
                     </div>
                 </div>
 
                 <button 
                     onClick={() => setMode(GameMode.MENU)}
                     className="mt-8 w-full bg-anemo-500 text-white font-bold py-3 rounded-xl hover:bg-anemo-600 transition">
-                    稍微懂了一点，去试试看！
+                    记住了，去试试！
                 </button>
              </div>
         </div>
@@ -376,20 +319,13 @@ export default function App() {
                 
                 {/* Question Display */}
                 <div className="mb-8 text-center">
-                    {currentQuestion.type === 'word' ? (
-                        <p className="text-xl md:text-2xl leading-relaxed text-gray-800 font-medium">
-                            {currentQuestion.text}
-                        </p>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center gap-6 py-4">
-                            <div className="bg-gray-50 px-8 py-6 rounded-2xl border border-gray-200">
-                                <div className="text-4xl font-bold text-gray-800 tracking-wider">
-                                    {currentQuestion.text.split('：')[1]}
-                                </div>
-                            </div>
-                            <div className="text-lg font-bold text-anemo-600 bg-anemo-50 px-4 py-1 rounded-full">
-                                {currentQuestion.subType === 'simplify' ? "请化简这个比 (答案格式 a:b)" : "请计算比值 (答案是一个数)"}
-                            </div>
+                    <p className="text-xl md:text-2xl leading-relaxed text-gray-800 font-medium">
+                        {currentQuestion.text}
+                    </p>
+                    {currentQuestion.type === 'calculation' && (
+                        <div className="mt-4 text-sm text-gray-500">
+                           {currentQuestion.subType === 'area' && "(记得带单位：平方厘米)"}
+                           {currentQuestion.subType === 'circumference' && "(记得带单位：厘米)"}
                         </div>
                     )}
                 </div>
@@ -397,7 +333,7 @@ export default function App() {
                 {/* Answer Input */}
                 <div className="flex flex-col items-center gap-4">
                     <div className="w-full max-w-sm relative">
-                        {/* Hint Button (Visible when idle) */}
+                        {/* Hint Button */}
                         {feedbackState === 'idle' && !hasUsedHint && (
                             <button 
                                 onClick={handleShowHint}
@@ -406,12 +342,12 @@ export default function App() {
                             </button>
                         )}
 
-                        <p className="text-sm text-gray-500 uppercase tracking-widest font-bold text-center mb-2">你的答案</p>
+                        <p className="text-sm text-gray-500 uppercase tracking-widest font-bold text-center mb-2">你的答案 (数字)</p>
                         
                         {feedbackState !== 'correct' && feedbackState !== 'incorrect' ? (
                             <input 
-                                type="text"
-                                placeholder={currentQuestion.subType === 'simplify' || currentQuestion.type === 'word' ? "例如 2:3" : "例如 0.5"}
+                                type="number"
+                                placeholder="输入数字..."
                                 value={inputAnswer}
                                 onChange={(e) => setInputAnswer(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && inputAnswer && handleSubmit()}
@@ -421,7 +357,7 @@ export default function App() {
                             <div className="flex flex-col items-center gap-4 animate-bounce-in w-full">
                                 <div className={`p-4 rounded-xl border-4 w-full text-center ${feedbackState === 'correct' ? 'border-green-400 bg-green-50 text-green-700' : 'border-red-400 bg-red-50 text-red-700'}`}>
                                     <span className="text-2xl font-bold">
-                                        {feedbackState === 'correct' ? "回答正确!" : "别气馁!"}
+                                        {feedbackState === 'correct' ? "回答正确!" : "再试一次!"}
                                     </span>
                                 </div>
                                 {feedbackState === 'incorrect' && (
