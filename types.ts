@@ -8,14 +8,17 @@ export enum GameMode {
 export interface Question {
   id: string;
   type: 'calculation' | 'word';
-  text: string;
-  // For calculation display
-  radius?: number;
-  diameter?: number;
-  target?: 'circumference' | 'area'; 
+  text: string; // The question display text
   
-  correctAnswer: number;
-  explanation?: string; // Pre-calculated or AI generated
+  // Specific for Ratio Practice
+  subType?: 'simplify' | 'value'; // simplify (化简比) or value (求比值)
+  
+  // Answers can be string (for "2:3") or number (for 0.5)
+  correctAnswer: string | number; 
+  explanation?: string; 
+  
+  // New: Hint for the user
+  hint?: string;
 }
 
 export interface GameState {
