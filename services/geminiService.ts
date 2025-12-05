@@ -1,5 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 
+// Declare process to satisfy TypeScript compiler in browser environments
+declare var process: any;
+
 const MODEL_NAME = 'gemini-2.5-flash';
 
 const SYSTEM_PROMPT = `
@@ -23,10 +26,8 @@ let aiClient: GoogleGenAI | null = null;
 const getAiClient = () => {
   if (aiClient) return aiClient;
   
-  // Access process.env.API_KEY safely, assuming polyfill exists in index.html for browsers
-  const apiKey = process.env.API_KEY || '';
-  
-  aiClient = new GoogleGenAI({ apiKey });
+  // Initialize strictly according to guidelines using process.env.API_KEY
+  aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
   return aiClient;
 };
 
@@ -38,9 +39,6 @@ export const getVentiFeedback = async (
 ): Promise<string> => {
   const ai = getAiClient();
   
-  // Basic validation to avoid empty API calls if key is missing (though client handles it gracefully usually)
-  // We proceed anyway to let the client throw the specific error if needed, or handle fallback in catch.
-
   const prompt = `
   题目：${question}
   正确答案：${correctAnswer}
