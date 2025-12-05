@@ -1,7 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize the API client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 const MODEL_NAME = 'gemini-2.5-flash';
 
 const SYSTEM_PROMPT = `
@@ -19,15 +17,36 @@ const SYSTEM_PROMPT = `
 分数除法口诀：除以一个数，等于乘以这个数的倒数。
 `;
 
+// Lazy initialization to prevent "process is not defined" errors during module load
+let aiClient: GoogleGenAI | null = null;
+
+const getAiClient = () => {
+  if (aiClient) return aiClient;
+  
+  // Safe access to process.env
+  let apiKey = '';
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      apiKey = process.env.API_KEY;
+    }
+  } catch (e) {
+    // Ignore error if process is not defined
+    console.warn("Could not access process.env");
+  }
+
+  aiClient = new GoogleGenAI({ apiKey });
+  return aiClient;
+};
+
 export const getVentiFeedback = async (
   question: string,
   userAnswer: string,
   correctAnswer: string,
   isCorrect: boolean
 ): Promise<string> => {
-  if (!process.env.API_KEY) {
-    return isCorrect ? "风向不错！答对了！（API Key缺失，无法召唤温迪）" : "哎呀，好像有点小误差。再试一次？（API Key缺失）";
-  }
+  const ai = getAiClient();
+  // We can't easily check api key presence on the instance, so we check the env safely again or just try
+  // If the key is empty, the API call will fail gracefully.
 
   const prompt = `
   题目：${question}
@@ -56,7 +75,7 @@ export const getVentiFeedback = async (
 };
 
 export const generateGenshinProblem = async (): Promise<{text: string, answerNumerator: number, answerDenominator: number, explanation: string} | null> => {
-    if (!process.env.API_KEY) return null;
+    const ai = getAiClient();
 
     const prompt = `
     请生成一道适合中国小学六年级的【分数乘法】或【分数除法】应用题。

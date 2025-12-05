@@ -6,14 +6,20 @@ import { getVentiFeedback, generateGenshinProblem } from './services/geminiServi
 
 // --- Helper: Simplify Fraction ---
 const gcd = (a: number, b: number): number => {
+  // CRITICAL FIX: Prevent infinite recursion if inputs are NaN or Infinity
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 1;
   return b === 0 ? a : gcd(b, a % b);
 };
 
 const simplify = (num: number, den: number): FractionType => {
-  const common = gcd(Math.abs(num), Math.abs(den));
+  // Safety check for NaN
+  const n = isNaN(num) ? 0 : num;
+  const d = isNaN(den) || den === 0 ? 1 : den;
+  
+  const common = gcd(Math.abs(n), Math.abs(d));
   return {
-    numerator: num / common,
-    denominator: den / common
+    numerator: n / common,
+    denominator: d / common
   };
 };
 
@@ -119,14 +125,28 @@ export default function App() {
 
   // --- Logic: Submit Answer ---
   const handleSubmit = async () => {
-    if (!currentQuestion || !inputNumerator || !inputDenominator) return;
+    if (!currentQuestion) return;
+
+    // VALIDATION: Check if inputs are valid numbers
+    const userNum = parseInt(inputNumerator);
+    const userDen = parseInt(inputDenominator);
+
+    if (isNaN(userNum) || isNaN(userDen)) {
+        setVentiMessage("哎呀？这个数字看起来有点奇怪，是不是输入错了？");
+        setVentiMood('surprised');
+        return;
+    }
+    
+    if (userDen === 0) {
+        setVentiMessage("分母不能为0哦！这是提瓦特大陆的法则！");
+        setVentiMood('surprised');
+        return;
+    }
 
     setFeedbackState('loading');
     setVentiMessage("嗯... 让我仔细看看你的答案...");
     setVentiMood('thinking');
 
-    const userNum = parseInt(inputNumerator);
-    const userDen = parseInt(inputDenominator);
     const userSimp = simplify(userNum, userDen);
     const correctSimp = currentQuestion.correctAnswer;
 
